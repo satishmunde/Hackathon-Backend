@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     'debug_toolbar',
     'rest_framework', 
     'channels',
-    'profiles',
+    'logs',
     'lms_system',
     'community',
     'core',

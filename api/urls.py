@@ -18,6 +18,8 @@ urlpatterns = [
     path('profile/', include('core.urls')),  # Ensure core.urls has a student namespace
     path('community/', include('community.urls')),
     path('lms/', include('lms_system.urls')),
+    path('logs/', include('logs.urls')),
+
 
 ]
 
