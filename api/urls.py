@@ -19,6 +19,7 @@ urlpatterns = [
     path('community/', include('community.urls')),
     path('lms/', include('lms_system.urls')),
     path('logs/', include('logs.urls')),
+    path('gamciflication/', include('gamiflication.urls')),
 
 
 ]

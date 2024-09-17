@@ -55,12 +55,33 @@ class StudentProfile(models.Model):
     grade = models.CharField(max_length=10)
     school_name = models.CharField(max_length=100)
     profile_picture = models.ImageField(upload_to='student_pics/', blank=True, null=True)
+    
+    # Performance tracking fields
+    points = models.IntegerField(default=0)
+    badges = models.JSONField(default=list)  # Stores badges as a list of strings (badge names)
+    streak = models.IntegerField(default=0)
+    games_played = models.IntegerField(default=0)
+    average_score = models.FloatField(default=0.0)
+    accuracy_rate = models.FloatField(default=0.0)  # Percentage of correct answers across all games
+
+    def __str__(self):
+        return f"{self.user.username} - Student"
 
 class TeacherProfile(models.Model):
     user = models.OneToOneField(LoginSystem, on_delete=models.CASCADE, limit_choices_to={'role': 'teacher'})
     department = models.CharField(max_length=100)
-
     profile_picture = models.ImageField(upload_to='teacher_pics/', blank=True, null=True)
+
+    # Performance tracking fields (same as StudentProfile)
+    points = models.IntegerField(default=0)
+    badges = models.JSONField(default=list)
+    streak = models.IntegerField(default=0)
+    games_played = models.IntegerField(default=0)
+    average_score = models.FloatField(default=0.0)
+    accuracy_rate = models.FloatField(default=0.0)
+
+    def __str__(self):
+        return f"{self.user.username} - Teacher"
 
 
 

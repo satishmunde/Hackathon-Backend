@@ -1,14 +1,18 @@
-# urls.py
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
-    UserProfileAPIView, AddPointsAPIView, BadgeListAPIView,
-    AwardBadgeAPIView, UserLevelAPIView
+    GameCategoryViewSet, GameViewSet, GameSessionViewSet,
+    UserPerformanceViewSet, UserGoalViewSet, RecommendationViewSet
 )
 
+router = DefaultRouter()
+router.register(r'game-categories', GameCategoryViewSet)
+router.register(r'games', GameViewSet)
+router.register(r'game-sessions', GameSessionViewSet)
+router.register(r'user-performances', UserPerformanceViewSet)
+router.register(r'user-goals', UserGoalViewSet)
+router.register(r'recommendations', RecommendationViewSet)
+
 urlpatterns = [
-    # path('profile/', UserProfileAPIView.as_view(), name='user_profile'),
-    path('add-points/', AddPointsAPIView.as_view(), name='add_points'),
-    path('badges/', BadgeListAPIView.as_view(), name='badge_list'),
-    path('award-badge/', AwardBadgeAPIView.as_view(), name='award_badge'),
-    path('level/', UserLevelAPIView.as_view(), name='user_level'),
+    path('', include(router.urls)),
 ]

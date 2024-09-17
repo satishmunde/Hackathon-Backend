@@ -1,134 +1,286 @@
-# In your views.py
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from .models import UserPoints
-
-@login_required
-def add_points(request, amount):
-    user_points = get_object_or_404(UserPoints, user=request.user)
-    user_points.add_points(amount)
-    return JsonResponse({'status': 'success', 'points': user_points.points})
-
-
-
-# Example of awarding a badge when a user reaches 100 points
-from .models import Badge, UserBadge
-
-@login_required
-def check_and_award_badge(request):
-    user_points = get_object_or_404(UserPoints, user=request.user)
-    
-    if user_points.points >= 100:  # Example condition
-        badge = Badge.objects.get(name='100 Points Club')
-        if not UserBadge.objects.filter(user=request.user, badge=badge).exists():
-            UserBadge.objects.create(user=request.user, badge=badge)
-            return JsonResponse({'status': 'badge_awarded', 'badge': badge.name})
-    
-    return JsonResponse({'status': 'no_badge_awarded'})
-
-
-
-# Example view to get the top users for a leaderboard
-from django.db.models import F
-from .models import UserPoints
-
-@login_required
-def leaderboard(request):
-    top_users = UserPoints.objects.order_by('-points')[:10]  # Top 10 users based on points
-    leaderboard_data = [{'user': user.user.username, 'points': user.points} for user in top_users]
-    return JsonResponse({'leaderboard': leaderboard_data})
-
-
-
-# views.py
-from rest_framework.views import APIView
+from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
+
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import status
-from .models import UserPoints, Badge, UserBadge, UserLevel
-from .serializers import UserPointsSerializer, UserBadgeSerializer, UserLevelSerializer
+from django_filters.rest_framework import DjangoFilterBackend
+from .models import GameCategory, Game, GameSession, UserPerformance, UserGoal, Recommendation
+from .serializers import (
+    GameCategorySerializer, GameSerializer, GameSessionSerializer,
+    UserPerformanceSerializer, UserGoalSerializer, RecommendationSerializer
+)
+from .filters import GameCategoryFilter, GameFilter, GameSessionFilter, UserPerformanceFilter, UserGoalFilter, RecommendationFilter  # Import your filters
 
-# View to get user profile with points, levels, and badges
-class UserProfileAPIView(APIView):
+from rest_framework.pagination import PageNumberPagination
+    
+
+class GameCategoryViewSet(viewsets.ModelViewSet):
+    queryset = GameCategory.objects.all()
+    serializer_class = GameCategorySerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = GameCategoryFilter
 
-    def get(self, request):
-        user = request.user
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
-        # Get or create points, levels, and badges data
-        points, _ = UserPoints.objects.get_or_create(user=user)
-        level, _ = UserLevel.objects.get_or_create(user=user)
-        badges = UserBadge.objects.filter(user=user)
-
-        # Serialize the data
-        points_serializer = UserPointsSerializer(points)
-        level_serializer = UserLevelSerializer(level)
-        badges_serializer = UserBadgeSerializer(badges, many=True)
-
-        return Response({
-            'points': points_serializer.data,
-            'level': level_serializer.data,
-            'badges': badges_serializer.data
-        })
-
-# View to add points to a user
-class AddPointsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        points_to_add = request.data.get('points', 0)
-
-        # Get or create user points
-        user_points, _ = UserPoints.objects.get_or_create(user=user)
-        user_points.add_points(points_to_add)
-
-        # Serialize updated points
-        points_serializer = UserPointsSerializer(user_points)
-
-        return Response(points_serializer.data, status=status.HTTP_200_OK)
-
-# View to fetch a list of all available badges
-class BadgeListAPIView(APIView):
-    def get(self, request):
-        badges = Badge.objects.all()
-        serializer = BadgeSerializer(badges, many=True)
+    def retrieve(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance)
         return Response(serializer.data)
 
-# View to award a badge to a user
-class AwardBadgeAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    def create(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def post(self, request):
-        user = request.user
-        badge_id = request.data.get('badge_id')
-
-        try:
-            badge = Badge.objects.get(id=badge_id)
-            UserBadge.objects.create(user=user, badge=badge)
-            return Response({'message': 'Badge awarded successfully!'}, status=status.HTTP_201_CREATED)
-        except Badge.DoesNotExist:
-            return Response({'error': 'Badge not found'}, status=status.HTTP_404_NOT_FOUND)
-
-# View to fetch user level and experience
-class UserLevelAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        level, _ = UserLevel.objects.get_or_create(user=user)
-        serializer = UserLevelSerializer(level)
+    def update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
         return Response(serializer.data)
 
-    # Optionally: API to add experience points and automatically level up
-    def post(self, request):
-        user = request.user
-        experience = request.data.get('experience', 0)
+    def partial_update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
 
-        # Get or create user level
-        user_level, _ = UserLevel.objects.get_or_create(user=user)
-        user_level.add_experience(experience)
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-        serializer = UserLevelSerializer(user_level)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class GameViewSet(viewsets.ModelViewSet):
+    queryset = Game.objects.select_related('category')
+    serializer_class = GameSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = GameFilter
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance)
+        return Response(serializer.data)
+
+    def create(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class GameSessionViewSet(viewsets.ModelViewSet):
+    queryset = GameSession.objects.select_related('user', 'game__category')
+    serializer_class = GameSessionSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = GameSessionFilter
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance)
+        return Response(serializer.data)
+
+    def create(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserPerformanceViewSet(viewsets.ModelViewSet):
+    queryset = UserPerformance.objects.select_related('user', 'game_category')
+    serializer_class = UserPerformanceSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = UserPerformanceFilter
+    
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance)
+        return Response(serializer.data)
+
+    def create(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class UserGoalViewSet(viewsets.ModelViewSet):
+    queryset = UserGoal.objects.select_related('user')
+    serializer_class = UserGoalSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = UserGoalFilter
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance)
+        return Response(serializer.data)
+
+    def create(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+    
+class RecommendationViewSet(viewsets.ModelViewSet):
+    queryset = Recommendation.objects.select_related('user', 'game_category', 'recommended_game')
+    serializer_class = RecommendationSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = RecommendationFilter
+    # pagination_class = CustomPageNumberPagination  # Use this if you have a custom pagination class
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = self.get_serializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+    
+    def retrieve(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance)
+        return Response(serializer.data)
+
+    def create(self, request):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, pk=None):
+        instance = self.get_object()
+        serializer = self.serializer_class(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)

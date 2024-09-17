@@ -46,6 +46,7 @@ class LoginSystemViewSet(viewsets.ModelViewSet):
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+ # Assuming a custom filter class for StudentProfile exists
 
 class StudentProfileViewSet(viewsets.ModelViewSet):
     queryset = StudentProfile.objects.select_related('user').all()  # Optimized query
@@ -55,7 +56,10 @@ class StudentProfileViewSet(viewsets.ModelViewSet):
     filterset_class = StudentFilter
 
     def list(self, request):
-        queryset = self.filter_queryset(self.get_queryset().only('id', 'user__id', 'user__username', 'grade', 'school_name', 'profile_picture'))
+        queryset = self.filter_queryset(self.get_queryset().only(
+            'id', 'user__id', 'user__username', 'grade', 'school_name', 'profile_picture',
+            'points', 'badges', 'streak', 'games_played', 'average_score', 'accuracy_rate'
+        ))
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -95,7 +99,10 @@ class TeacherProfileViewSet(viewsets.ModelViewSet):
     filterset_class = TeacherFilter
 
     def list(self, request):
-        queryset = self.filter_queryset(self.get_queryset().only('id', 'user__id', 'user__username', 'department', 'profile_picture'))
+        queryset = self.filter_queryset(self.get_queryset().only(
+            'id', 'user__id', 'user__username', 'department', 'profile_picture',
+            'points', 'badges', 'streak', 'games_played', 'average_score', 'accuracy_rate'
+        ))
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 

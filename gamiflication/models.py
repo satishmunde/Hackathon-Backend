@@ -1,57 +1,90 @@
 from django.db import models
-from django.conf import settings  # To link with the custom user model
-from django.utils import timezone
+from django.core.files.storage import default_storage
+from django.dispatch import receiver
+from django.db.models.signals import pre_save, post_delete
+from django.conf import settings
 
-# Model to track user points
-class UserPoints(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='points')
-    points = models.PositiveIntegerField(default=0)
-    updated_at = models.DateTimeField(auto_now=True)
+from django.db import models
 
-    def __str__(self):
-        return f'{self.user.username} - {self.points} points'
-
-    def add_points(self, amount):
-        self.points += amount
-        self.save()
-
-# Model for badges
-class Badge(models.Model):
-    name = models.CharField(max_length=255)
-    description = models.TextField()
-    icon = models.ImageField(upload_to='badges/icons/')  # Optional icon for the badge
-    created_at = models.DateTimeField(default=timezone.now)
+class GameCategory(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
 
-# Model to track which badges a user has earned
-class UserBadge(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='badges')
-    badge = models.ForeignKey(Badge, on_delete=models.CASCADE)
-    earned_at = models.DateTimeField(default=timezone.now)
+class Game(models.Model):
+    title = models.CharField(max_length=100)
+    category = models.ForeignKey(GameCategory, on_delete=models.CASCADE)
+    content = models.TextField()  # Store game data (puzzles, riddles, etc.)
+    difficulty = models.CharField(max_length=10)  # easy, medium, hard
+    correct_answer = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)  # Optional: A brief description of the game
+    image = models.ImageField(upload_to='games/', blank=True, null=True)  # Optional: Image related to the game
+    tags = models.ManyToManyField('Tag', blank=True)  # Optional: Tags for categorizing the game
 
     def __str__(self):
-        return f'{self.user.username} earned {self.badge.name}'
+        return self.title
 
-# Model to track user levels
-class UserLevel(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='level')
-    level = models.PositiveIntegerField(default=1)
-    experience_points = models.PositiveIntegerField(default=0)
-    updated_at = models.DateTimeField(auto_now=True)
+class Tag(models.Model):
+    name = models.CharField(max_length=50)
 
     def __str__(self):
-        return f'{self.user.username} - Level {self.level}'
+        return self.name
 
-    def add_experience(self, exp):
-        self.experience_points += exp
-        # Logic to level up based on experience points
-        while self.experience_points >= self.points_needed_for_next_level():
-            self.level += 1
-            self.experience_points -= self.points_needed_for_next_level()
-        self.save()
 
-    def points_needed_for_next_level(self):
-        # Example: Points required for next level increases with level
-        return 100 * self.level
+class GameSession(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  # Link to settings.AUTH_USER_MODEL for both student and teacher
+    game = models.ForeignKey(Game, on_delete=models.CASCADE)
+    date_played = models.DateTimeField(auto_now_add=True)
+    score = models.IntegerField()
+    time_taken = models.FloatField()  # Time taken in seconds
+    completed = models.BooleanField(default=False)  # Whether the game was completed or skipped
+    hints_used = models.IntegerField(default=0)
+    difficulty = models.CharField(max_length=10)  # easy, medium, hard
+
+    def calculate_score(self):
+        # Logic to calculate score based on hints, time taken, and difficulty
+        pass
+
+    def __str__(self):
+        return f"GameSession for {self.user.username} - {self.game.title}"
+
+
+class UserPerformance(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  # Links to either student or teacher
+    game_category = models.ForeignKey(GameCategory, on_delete=models.CASCADE)
+    avg_score = models.FloatField(default=0.0)
+    total_games_played = models.IntegerField(default=0)
+    avg_time_taken = models.FloatField(default=0.0)
+    accuracy_rate = models.FloatField(default=0.0)  # Percentage of correct answers
+    difficulty_level = models.CharField(max_length=10)  # Current user difficulty level for the category (easy, medium, hard)
+
+    def update_performance(self):
+        # Logic to update performance metrics based on GameSession data
+        pass
+
+    def __str__(self):
+        return f"Performance of {self.user.username} in {self.game_category.name}"
+
+
+class UserGoal(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  # Linked to both student and teacher
+    description = models.TextField()  # Description of the goal
+    created_at = models.DateTimeField(auto_now_add=True)
+    target_completion_date = models.DateTimeField()  # Deadline for goal
+    is_completed = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Goal for {self.user.username}: {self.description}"
+
+class Recommendation(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  # Linked to both student and teacher
+    game_category = models.ForeignKey(GameCategory, on_delete=models.CASCADE)
+    message = models.TextField()  # Personalized message (e.g., "Focus on medium puzzles")
+    recommended_game = models.ForeignKey(Game, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Recommendation for {self.user.username}"
+
+

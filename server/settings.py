@@ -180,14 +180,25 @@ MEDIA_ROOT = BASE_DIR/'media'
 MEDIA_URL = "/media/"
 
 REST_FRAMEWORK = {
-    'CORE_DECIMAL_TO_STRING': False,
+    # Set the default pagination class
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    
+    # Define the default number of items per page
+    'PAGE_SIZE': 10,  # Adjust this number based on your needs
+
+    # Optional: Allow clients to specify page size via query parameter
+    'PAGE_SIZE_QUERY_PARAM': 'page_size',
+
+    # Optional: Set a maximum page size to prevent abuse
+    'MAX_PAGE_SIZE': 100,
+
+    # Set the default authentication and permission classes
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    
 }
 
 

@@ -39,16 +39,19 @@ class LoginSystemSerializer(serializers.ModelSerializer):
 
 
 class StudentProfileSerializer(serializers.ModelSerializer):
-    user = LoginSystemSerializer(read_only=True)  # Nested serializer
+    user = LoginSystemSerializer(read_only=True)  # Nested serializer for user data
 
     class Meta:
         model = StudentProfile
-        fields = ['id', 'user', 'grade', 'school_name', 'profile_picture']
+        fields = [
+            'id', 'user', 'grade', 'school_name', 'profile_picture',
+            'points', 'badges', 'streak', 'games_played', 'average_score', 'accuracy_rate'
+        ]
 
-    # Field-level validation for grade
+    # Field-level validation for grade (assumed to be a string, so modify accordingly if it's an integer)
     def validate_grade(self, value):
-        if value < 1 or value > 12:
-            raise serializers.ValidationError("Grade must be between 1 and 12.")
+        if not value.isdigit() or int(value) < 1 or int(value) > 12:
+            raise serializers.ValidationError("Grade must be a number between 1 and 12.")
         return value
 
     # Field-level validation for school_name
@@ -57,18 +60,33 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("School name must be at least 3 characters long.")
         return value
 
-    # Validate profile picture size
+    # Validate profile picture size (custom validation)
     def validate_profile_picture(self, value):
-        validate_file_size(value)
+        if value:
+            validate_file_size(value)  # Call custom validator
         return value
 
+    # Additional validation for badges (ensure it's a list of strings)
+    def validate_badges(self, value):
+        if not isinstance(value, list) or not all(isinstance(badge, str) for badge in value):
+            raise serializers.ValidationError("Badges must be a list of strings.")
+        return value
+
+    # Custom validation for accuracy_rate to ensure it's a percentage between 0 and 100
+    def validate_accuracy_rate(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("Accuracy rate must be between 0 and 100.")
+        return value
 
 class TeacherProfileSerializer(serializers.ModelSerializer):
-    user = LoginSystemSerializer(read_only=True)  # Nested serializer
+    user = LoginSystemSerializer(read_only=True)  # Nested serializer for user data
 
     class Meta:
         model = TeacherProfile
-        fields = ['id', 'user', 'department', 'profile_picture']
+        fields = [
+            'id', 'user', 'department', 'profile_picture',
+            'points', 'badges', 'streak', 'games_played', 'average_score', 'accuracy_rate'
+        ]
 
     # Field-level validation for department
     def validate_department(self, value):
@@ -76,9 +94,22 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Department name must be at least 3 characters long.")
         return value
 
-    # Validate profile picture size
+    # Validate profile picture size (custom validation)
     def validate_profile_picture(self, value):
-        validate_file_size(value)
+        if value:
+            validate_file_size(value)  # Call custom validator
+        return value
+
+    # Additional validation for badges (ensure it's a list of strings)
+    def validate_badges(self, value):
+        if not isinstance(value, list) or not all(isinstance(badge, str) for badge in value):
+            raise serializers.ValidationError("Badges must be a list of strings.")
+        return value
+
+    # Custom validation for accuracy_rate to ensure it's a percentage between 0 and 100
+    def validate_accuracy_rate(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("Accuracy rate must be between 0 and 100.")
         return value
 
 
